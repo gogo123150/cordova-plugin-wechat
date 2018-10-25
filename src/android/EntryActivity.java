@@ -5,14 +5,19 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 
-import com.tencent.mm.sdk.constants.ConstantsAPI;
-import com.tencent.mm.sdk.modelbase.BaseReq;
-import com.tencent.mm.sdk.modelbase.BaseResp;
-import com.tencent.mm.sdk.modelmsg.SendAuth;
-import com.tencent.mm.sdk.openapi.IWXAPIEventHandler;
+import com.tencent.mm.opensdk.constants.ConstantsAPI;
+import com.tencent.mm.opensdk.modelbase.BaseReq;
+import com.tencent.mm.opensdk.modelbase.BaseResp;
+import com.tencent.mm.opensdk.modelmsg.SendAuth;
+import com.tencent.mm.opensdk.openapi.IWXAPI;
+import com.tencent.mm.opensdk.openapi.IWXAPIEventHandler;
+import com.tencent.mm.opensdk.modelbiz.ChooseCardFromWXCardPackage;
 
+import org.apache.cordova.CallbackContext;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
 
 import xu.li.cordova.wechat.Wechat;
 
@@ -25,10 +30,12 @@ public class EntryActivity extends Activity implements IWXAPIEventHandler {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (Wechat.instance.getWxAPI() == null) {
+        IWXAPI api = Wechat.getWxAPI(this);
+
+        if (api == null) {
             startMainActivity();
         } else {
-            Wechat.instance.getWxAPI().handleIntent(getIntent(), this);
+            api.handleIntent(getIntent(), this);
         }
     }
 
@@ -38,18 +45,22 @@ public class EntryActivity extends Activity implements IWXAPIEventHandler {
 
         setIntent(intent);
 
-        if (Wechat.instance.getWxAPI() == null) {
+        IWXAPI api = Wechat.getWxAPI(this);
+        if (api == null) {
             startMainActivity();
         } else {
-            Wechat.instance.getWxAPI().handleIntent(intent, this);
+            api.handleIntent(intent, this);
         }
+
     }
 
     @Override
     public void onResp(BaseResp resp) {
         Log.d(Wechat.TAG, resp.toString());
 
-        if (Wechat.instance.getCurrentCallbackContext() == null) {
+        CallbackContext ctx = Wechat.getCurrentCallbackContext();
+
+        if (ctx == null) {
             startMainActivity();
             return ;
         }
@@ -60,31 +71,40 @@ public class EntryActivity extends Activity implements IWXAPIEventHandler {
                     case ConstantsAPI.COMMAND_SENDAUTH:
                         auth(resp);
                         break;
-
+                    case ConstantsAPI.COMMAND_CHOOSE_CARD_FROM_EX_CARD_PACKAGE:
+                        plunckInvoiceData(resp);
+                        break;
                     case ConstantsAPI.COMMAND_PAY_BY_WX:
                     default:
-                        Wechat.instance.getCurrentCallbackContext().success();
+                        ctx.success();
                         break;
                 }
                 break;
             case BaseResp.ErrCode.ERR_USER_CANCEL:
-                Wechat.instance.getCurrentCallbackContext().error(Wechat.ERROR_WECHAT_RESPONSE_USER_CANCEL);
+                ctx.error(Wechat.ERROR_WECHAT_RESPONSE_USER_CANCEL);
                 break;
             case BaseResp.ErrCode.ERR_AUTH_DENIED:
-                Wechat.instance.getCurrentCallbackContext().error(Wechat.ERROR_WECHAT_RESPONSE_AUTH_DENIED);
+                ctx.error(Wechat.ERROR_WECHAT_RESPONSE_AUTH_DENIED);
                 break;
             case BaseResp.ErrCode.ERR_SENT_FAILED:
-                Wechat.instance.getCurrentCallbackContext().error(Wechat.ERROR_WECHAT_RESPONSE_SENT_FAILED);
+                ctx.error(Wechat.ERROR_WECHAT_RESPONSE_SENT_FAILED);
                 break;
             case BaseResp.ErrCode.ERR_UNSUPPORT:
-                Wechat.instance.getCurrentCallbackContext().error(Wechat.ERROR_WECHAT_RESPONSE_UNSUPPORT);
+                ctx.error(Wechat.ERROR_WECHAT_RESPONSE_UNSUPPORT);
                 break;
             case BaseResp.ErrCode.ERR_COMM:
-                Wechat.instance.getCurrentCallbackContext().error(Wechat.ERROR_WECHAT_RESPONSE_COMMON);
+                ctx.error(Wechat.ERROR_WECHAT_RESPONSE_COMMON);
                 break;
             default:
-                Wechat.instance.getCurrentCallbackContext().error(Wechat.ERROR_WECHAT_RESPONSE_UNKNOWN);
+                ctx.error(Wechat.ERROR_WECHAT_RESPONSE_UNKNOWN);
                 break;
+        }
+
+        // restore appid
+        final String appid = Wechat.getAppId();
+        final String savedAppId = Wechat.getSavedAppId(this);
+        if (!savedAppId.equals(appid)) {
+            Wechat.saveAppId(this, Wechat.getAppId());
         }
 
         finish();
@@ -107,6 +127,13 @@ public class EntryActivity extends Activity implements IWXAPIEventHandler {
 
         Log.d(Wechat.TAG, res.toString());
 
+        // get current callback context
+        CallbackContext ctx = Wechat.getCurrentCallbackContext();
+
+        if (ctx == null) {
+            return ;
+        }
+
         JSONObject response = new JSONObject();
         try {
             response.put("code", res.code);
@@ -117,6 +144,22 @@ public class EntryActivity extends Activity implements IWXAPIEventHandler {
             Log.e(Wechat.TAG, e.getMessage());
         }
 
-        Wechat.instance.getCurrentCallbackContext().success(response);
+        ctx.success(response);
     }
+
+    protected void plunckInvoiceData(BaseResp resp) {
+
+            CallbackContext ctx = Wechat.getCurrentCallbackContext();
+            ChooseCardFromWXCardPackage.Resp resp1 = (ChooseCardFromWXCardPackage.Resp) resp;
+            JSONObject response = new JSONObject();
+
+            try {
+                JSONArray resp2 = new JSONArray(resp1.cardItemList);
+                response.put("data", resp2);
+            } catch (JSONException e) {
+                Log.e(Wechat.TAG, e.getMessage());
+            }
+
+            ctx.success(response);
+        }
 }
