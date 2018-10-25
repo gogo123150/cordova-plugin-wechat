@@ -128,5 +128,6 @@
         <source-file src="src/android/Wechat.java" target-dir="src/xu/li/cordova/wechat" />
         <source-file src="src/android/Util.java" target-dir="src/xu/li/cordova/wechat" />
         <framework src="android-build.gradle" custom="true" type="gradleReference" />
+		<source-file src="src/android/wechat-sdk-android-with-mta-5.1.6" target-dir="libs" />
     </platform>
 </plugin>
